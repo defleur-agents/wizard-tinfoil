@@ -18,7 +18,7 @@ services:
       XDG_CACHE_HOME: /data/private/cache
       XDG_DATA_HOME: /data/private/share
     volumes:
-    - ${APP_DATA_DIR}/data:/data
+    - tinfoil-private-data:/data
     read_only: true
     command:
     - python
@@ -33,3 +33,6 @@ services:
 x-runtipi:
   schema_version: 2
   overrides: []
+volumes:
+  tinfoil-private-data:
+    name: wizard-tinfoil-private-data
