@@ -3,14 +3,14 @@
   "id": "wizard-tinfoil",
   "wizard_type": "external",
   "available": true,
-  "short_desc": "External: Connect Tinfoil with a server-held key and verified enclave transport.",
+  "short_desc": "External: Connect your Tinfoil API key.",
   "author": "Humanity Labs",
   "port": 18804,
   "categories": [
     "network"
   ],
   "description": "Owner-only Tinfoil connection using the official attestation-verifying SDK. No unverified fallback.",
-  "tipi_version": 5,
+  "tipi_version": 6,
   "version": "0.1.0",
   "source": "https://github.com/oscarhenrycollins/wizard-tinfoil",
   "exposable": false,

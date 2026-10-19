@@ -12,18 +12,20 @@ with sync_playwright() as p:
     page.request.post(BASE+'/api/disconnect',data={},headers={'Origin':BASE,'X-Wizard-Request':'1'})
     page.reload();page.get_by_text('Not connected',exact=True).wait_for()
     assert page.locator('#api-key').get_attribute('type')=='password'
-    assert page.locator('#disconnect').is_disabled()
+    assert page.locator('#disconnect').is_hidden() and page.locator('#api-key').is_visible()
+    assert page.get_by_role('link',name='Get a key ↗').get_attribute('href')=='https://dash.tinfoil.sh'
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
     # Synthetic key, never a real credential. It must not be called authenticated.
     page.locator('#api-key').fill('synthetic-invalid-key-for-private-qa')
     page.locator('#connect').click()
-    page.get_by_text('Key saved · awaiting first successful request',exact=True).wait_for(timeout=60000)
+    page.get_by_text('Key saved',exact=True).wait_for(timeout=60000)
     assert page.locator('#api-key').input_value()==''
     assert 'synthetic-invalid-key-for-private-qa' not in page.locator('body').inner_text()
     s=page.request.get(BASE+'/api/connection').json()
     assert s['credentialStored'] and not s['credentialVerified'] and s['status']=='not_connected'
     page.locator('#test').click()
     expect(page.locator('#test')).to_be_enabled(timeout=60000)
+    assert page.locator('#connect-form').is_hidden() and page.locator('#disconnect').is_visible()
     page.locator('#disconnect').click()
     page.get_by_text('Not connected',exact=True).wait_for()
     assert not page.request.get(BASE+'/api/connection').json()['credentialStored']

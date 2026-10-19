@@ -5,7 +5,7 @@ name: Tinfoil
 type: external
 category: system
 version: 0.1.0
-summary: Connect Tinfoil with a server-held API key and verified enclave transport.
+summary: Connect your Tinfoil API key.
 license: GPL-3.0-only
 source: https://github.com/oscarhenrycollins/wizard-tinfoil
 runtime:
@@ -33,6 +33,7 @@ system: true
 uses: []
 needs: []
 health: /healthz
+icon: icon.png
 ---
 
 # Tinfoil
