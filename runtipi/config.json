@@ -1,0 +1,29 @@
+{
+  "name": "Tinfoil (Private Preview)",
+  "id": "wizard-tinfoil",
+  "wizard_type": "external",
+  "available": true,
+  "short_desc": "External: Connect Tinfoil with a server-held key and verified enclave transport.",
+  "author": "Humanity Labs",
+  "port": 18803,
+  "categories": [
+    "network"
+  ],
+  "description": "Private staged Tinfoil connection. Not published and not registered in the chat selector. Official attestation-verifying SDK; no unverified fallback.",
+  "tipi_version": 1,
+  "version": "0.1.0",
+  "source": "https://github.com/tinfoilsh/tinfoil-python",
+  "exposable": false,
+  "supported_architectures": [
+    "amd64",
+    "arm64"
+  ],
+  "created_at": 1791500000000,
+  "updated_at": 1791500000000,
+  "dynamic_config": true,
+  "min_tipi_version": "4.8.0",
+  "uid": 1000,
+  "gid": 1000,
+  "form_fields": [],
+  "no_gui": false
+}

@@ -1,0 +1,6 @@
+{
+  "request": "Connect Tinfoil securely with an attestation-verified inference gateway",
+  "template": "hello-wizard",
+  "state": "local_draft",
+  "name": "Wizard Tinfoil"
+}
