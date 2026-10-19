@@ -46,7 +46,7 @@ class Tests(unittest.TestCase):
             self.assertEqual(file.read_bytes(),before)
         old=(s.DATA/'gateway-token.json').read_bytes()
         self.assertEqual(self.call('/api/disconnect',{})[0],200)
-        self.assertFalse(file.exists());self.assertNotEqual(old,(s.DATA/'gateway-token.json').read_bytes())
+        self.assertFalse(file.exists());self.assertEqual(old,(s.DATA/'gateway-token.json').read_bytes())
         self.assertEqual(other.status()['status'],'not_connected')
     def test_02_guards(self):
         for header in ['tailscale-user-login','x-forwarded-for','forwarded','x-real-ip','cf-ray']:
@@ -57,6 +57,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(self.call('/api/disconnect',{}, {'Origin':''})[0],403)
         self.assertEqual(self.call('/api/disconnect',{}, {'Sec-Fetch-Site':'cross-site'})[0],403)
         self.assertEqual(self.call('/v1/models',None,{'Origin':''})[0],401)
+        self.assertEqual(self.call('/api/status',None,{'Tailscale-User-Login':'owner-test'})[0],200)
+        self.assertEqual(self.call('/api/status',None,{'Origin':'https://evil.invalid'})[0],403)
         self.assertEqual(self.call('/connection.json')[0],404)
     def test_03_mcp_and_gateway(self):
         code,b=self.call('/mcp',{'jsonrpc':'2.0','id':1,'method':'tools/list'});self.assertEqual(code,200)

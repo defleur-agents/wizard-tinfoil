@@ -88,7 +88,7 @@ class Handler(BaseHTTPRequestHandler):
         path=urlsplit(self.path).path
         if self.refused(path): return
         if path=='/healthz': return self.send(200,{'ok':True,'app':'wizard-tinfoil','version':'0.1.0'})
-        if path=='/api/connection': return self.send(200,status())
+        if path in ('/api/connection', '/api/status'): return self.send(200,status())
         if path=='/v1/models': return self.send(200,{'object':'list','data':[{'id':x,'object':'model','owned_by':'tinfoil'} for x in status()['models']]})
         if path=='/openapi.json': return self.send(200,(ROOT/'openapi.json').read_bytes())
         name='index.html' if path=='/' else path[1:]
@@ -122,7 +122,9 @@ class Handler(BaseHTTPRequestHandler):
                 if body: raise ValueError()
                 with LOCK:
                     (DATA/'connection.json').unlink(missing_ok=True)
-                    atomic('gateway-token.json',{'token':secrets.token_urlsafe(48)})
+                    # Keep the box-only app credential stable across provider logout.
+                    # Removing connection.json immediately disables all inference.
+
                 return self.send(200,status())
             if path=='/v1/chat/completions':
                 s=stored()
