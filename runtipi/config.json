@@ -10,7 +10,7 @@
     "network"
   ],
   "description": "Owner-only Tinfoil connection using the official attestation-verifying SDK. No unverified fallback.",
-  "tipi_version": 3,
+  "tipi_version": 4,
   "version": "0.1.0",
   "source": "https://github.com/oscarhenrycollins/wizard-tinfoil",
   "exposable": false,

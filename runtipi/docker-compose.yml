@@ -1,6 +1,6 @@
 services:
   wizard-tinfoil:
-    image: 127.0.0.1:5000/wizard-tinfoil:0.1.0-owner.2
+    image: 127.0.0.1:5000/wizard-tinfoil:0.1.0-owner.3@sha256:dec6adb9b5670c571b0ca416b6f605ef52e72f45de7c93df8e43460306247e9a
     user: 1000:1000
     cap_drop:
     - ALL
