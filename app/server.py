@@ -40,9 +40,9 @@ def stored():
     except FileNotFoundError: return None
 
 def status():
-    with LOCK:
-        s = stored()
-        return {'contract':'wizard.ai-connection/1','provider':'tinfoil','name':'Tinfoil','status':'connected' if s else 'not_connected','plan':None,'account':None,'usage':None,'error':None,'models':s['models'] if s else [],'verification':{'mode':'official-sdk-attestation','sdk':'tinfoil==0.14.0','lastVerifiedAt':s['verifiedAt'] if s else None},'chatIntegration':'not_registered'}
+    # Atomic replace makes this a safe snapshot; never wait behind network verification.
+    s = stored()
+    return {'contract':'wizard.ai-connection/1','provider':'tinfoil','name':'Tinfoil','status':'connected' if s and s.get('authenticated') else 'not_connected','credentialStored':bool(s),'credentialVerified':bool(s and s.get('authenticated')),'plan':None,'account':None,'usage':None,'error':None,'models':s['models'] if s else [],'verification':{'mode':'official-sdk-attestation','sdk':'tinfoil==0.14.0','lastVerifiedAt':s['verifiedAt'] if s else None},'chatIntegration':'not_registered'}
 
 def worker(action, key, payload=None):
     # Kill on timeout; no upstream exception/headers/body may reach logs or clients.
@@ -109,14 +109,14 @@ class Handler(BaseHTTPRequestHandler):
                 if set(body)!={'apiKey'} or not key_ok(body['apiKey']): return self.send(400,{'error':'Enter a valid API key (16–512 non-space ASCII characters).'})
                 with LOCK:
                     result=worker('verify',body['apiKey'])
-                    atomic('connection.json',{'key':body['apiKey'],**result})
+                    atomic('connection.json',{'key':body['apiKey'],'authenticated':False,**result})
                 return self.send(200,status())
             if path=='/api/test':
                 if body: raise ValueError()
                 with LOCK:
                     s=stored()
                     if not s: return self.send(409,{'error':'Connect an API key first.'})
-                    result=worker('verify',s['key']); atomic('connection.json',{'key':s['key'],**result})
+                    result=worker('verify',s['key']); atomic('connection.json',{**s,**result})
                 return self.send(200,status())
             if path=='/api/disconnect':
                 if body: raise ValueError()
@@ -132,6 +132,9 @@ class Handler(BaseHTTPRequestHandler):
                 allowed={'model','messages','temperature','top_p','max_tokens','max_completion_tokens','tools','tool_choice','parallel_tool_calls','stop','response_format','stream','stream_options','seed','presence_penalty','frequency_penalty'}
                 if set(body)-allowed or body.get('stream') not in (None,False,True): raise ValueError()
                 result=worker('infer',s['key'],body)
+                with LOCK:
+                    current=stored()
+                    if current and hmac.compare_digest(current['key'],s['key']): atomic('connection.json',{**current,'authenticated':True})
                 if body.get('stream'):
                     return self.send(200,result['sse'].encode(),'text/event-stream')
                 return self.send(200,result)
@@ -141,6 +144,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception: self.send(503,{'error':'Connection unavailable. No unverified fallback was used.'})
 
 def initialize():
+    os.umask(0o077)
     DATA.mkdir(mode=0o700,parents=True,exist_ok=True); os.chmod(DATA,0o700)
     if not (DATA/'gateway-token.json').exists(): atomic('gateway-token.json',{'token':secrets.token_urlsafe(48)})
 

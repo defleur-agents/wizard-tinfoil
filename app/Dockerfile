@@ -7,6 +7,6 @@ COPY web /app/web
 COPY openapi.json /app/openapi.json
 RUN mkdir /data && chown 1000:1000 /data && chmod 700 /data
 USER 1000:1000
-ENV DATA_DIR=/data PORT=18803
+ENV DATA_DIR=/data PORT=18803 HOME=/data XDG_CACHE_HOME=/data/cache XDG_DATA_HOME=/data/share
 EXPOSE 18803
 CMD ["python", "/app/app/server.py"]
