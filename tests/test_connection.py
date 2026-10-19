@@ -68,7 +68,11 @@ class Tests(unittest.TestCase):
         s.atomic('connection.json',{'key':KEY,'models':['test-model'],'verifiedAt':'test'})
         with patch.object(s,'worker',return_value={'object':'chat.completion','choices':[]}):
             self.assertEqual(self.call('/v1/chat/completions',{'model':'test-model','messages':[{'role':'user','content':'synthetic'}]},h)[0],200)
+            self.assertTrue(s.status()['credentialVerified'])
             self.assertEqual(self.call('/v1/chat/completions',{'model':'test-model','messages':[{}],'base_url':'https://evil.invalid'},h)[0],400)
+        with patch.object(s,'worker',return_value={'sse':'data: {"object":"chat.completion.chunk"}\n\ndata: [DONE]\n\n'}):
+            code,b=self.call('/v1/chat/completions',{'model':'test-model','messages':[{'role':'user','content':'synthetic'}],'stream':True},h)
+            self.assertEqual(code,200);self.assertIn(b'data: [DONE]',b)
         self.call('/api/disconnect',{})
     def test_04_sdk_fail_closed(self):
         calls=[]
@@ -87,4 +91,14 @@ class Tests(unittest.TestCase):
         self.assertEqual(p.run('verify',{'key':KEY},Client)['models'],['test-model'])
         self.assertEqual(p.run('infer',{'key':KEY,'payload':{'model':'test-model','messages':[]}},Client)['object'],'chat.completion')
         self.assertEqual(events,['verified-constructor','close','verified-constructor','close'])
+    def test_06_real_sdk_attestation_failure_blocks_requests(self):
+        try:
+            import tinfoil
+        except ImportError:
+            self.skipTest('Run in the built image for the actual SDK test')
+        with patch('tinfoil.get_router_address',return_value='synthetic.invalid'), patch('tinfoil.client.SecureClient.verify',side_effect=ValueError('controlled attestation rejection')), patch('openai.resources.chat.completions.Completions.create') as sent:
+            with self.assertRaises(ValueError):
+                p.run('infer',{'key':KEY,'payload':{'model':'test-model','messages':[{'role':'user','content':'synthetic'}]}})
+            sent.assert_not_called()
+
 if __name__=='__main__':unittest.main(verbosity=2)
