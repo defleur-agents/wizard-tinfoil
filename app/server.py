@@ -238,7 +238,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get('Host','').lower() not in HOSTS: self.send(403,{'error':'Untrusted host.'}); return True
         origin=self.headers.get('Origin','').lower()
         if origin and origin not in ORIGINS or self.headers.get('Sec-Fetch-Site')=='cross-site': self.send(403,{'error':'Cross-site request refused.'}); return True
-        if path=='/mcp' or path=='/api/connection' or path.startswith('/v1/'):
+        if path=='/mcp' or path=='/api/connection' or path.startswith(('/v1/','/api/private-clients')):
             if any(k.lower() in {'tailscale-user-login','x-forwarded-for','forwarded','x-real-ip'} or k.lower().startswith('cf-') for k in self.headers): self.send(403,{'error':'Box-only endpoint.'}); return True
         if write and path.startswith('/api/') and (origin not in ORIGINS or self.headers.get('X-Wizard-Request')!='1'): self.send(403,{'error':'Use the trusted connection page.'}); return True
         if path.startswith('/v1/'):

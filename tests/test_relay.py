@@ -85,10 +85,10 @@ class RelayTests(unittest.TestCase):
         http = s.relay.make_server(('127.0.0.1', 0), s.private_token_ok, s.stored)
         threading.Thread(target=http.serve_forever, daemon=True).start()
         def call(path, method='GET', body=None, headers=None):
-            c = httpclient = http_module.HTTPConnection('127.0.0.1', http.server_port, timeout=3)
+            c = http_module.HTTPConnection('127.0.0.1', http.server_port, timeout=3)
             c.request(method, path, body=body, headers=headers or {})
             response = c.getresponse(); result = (response.status, dict(response.getheaders()), response.read()); c.close(); return result
-        http_module = http_client_module = __import__('http.client', fromlist=['HTTPConnection'])
+        http_module = __import__('http.client', fromlist=['HTTPConnection'])
         log = io.StringIO()
         try:
             with contextlib.redirect_stderr(log), patch.object(s.relay, 'peer_allowed', return_value=False):
@@ -96,6 +96,7 @@ class RelayTests(unittest.TestCase):
             with contextlib.redirect_stderr(log), patch.object(s.relay, 'peer_allowed', return_value=True), patch.object(s.relay.http.client, 'HTTPSConnection', Connection):
                 self.assertEqual(call('/healthz')[0], 200)
                 self.assertEqual(call('/attestation')[0], 401)
+                self.assertEqual(call('/attestation', headers={'Authorization':'Bearer '+'x'*64})[0],401)
                 headers = {'Authorization': 'Bearer '+token, 'X-Tinfoil-Enclave-Url':'https://inference.tinfoil.sh', 'Ehbp-Encapsulated-Key':'encapsulated', 'Content-Type':'application/octet-stream', 'Cookie':'secret-cookie'}
                 self.assertEqual(call('/v1/chat/completions','POST', b'ciphertext', headers)[0], 200)
                 self.assertIn(('header','ehbp-encapsulated-key','encapsulated'), calls)
@@ -110,6 +111,12 @@ class RelayTests(unittest.TestCase):
                 headers['X-Tinfoil-Enclave-Url']='https://evil.invalid'
                 self.assertEqual(call('/v1/chat/completions','POST',b'PRIVPROBE-unit',headers)[0],400)
                 self.assertEqual(call('/attestation', headers={'Authorization':'Bearer '+token})[0],200)
+                headers['X-Tinfoil-Enclave-Url']='https://inference.tinfoil.sh'
+                (s.DATA/'connection.json').unlink()
+                self.assertEqual(call('/v1/chat/completions','POST',b'ciphertext',headers)[0],503)
+                s.atomic('connection.json', {'key':'synthetic-provider-key'})
+                with patch.object(Connection, 'getresponse', side_effect=OSError('PRIVPROBE-do-not-log')):
+                    self.assertEqual(call('/v1/chat/completions','POST',b'ciphertext',headers)[0],502)
             self.assertEqual(log.getvalue(), '')
             self.assertNotIn('PRIVPROBE-unit', ''.join(p.read_text() for p in s.DATA.iterdir()))
         finally:
@@ -128,7 +135,7 @@ class RelayTests(unittest.TestCase):
         http_client = __import__('http.client', fromlist=['HTTPConnection'])
         try:
             valid={'Origin':base,'X-Wizard-Request':'1','Content-Type':'application/json'}
-            for bad in ({}, {**valid,'Origin':'https://evil.invalid'}, {**valid,'Host':'evil.invalid'}, {**valid,'X-Wizard-Request':''}, {**valid,'Sec-Fetch-Site':'cross-site'}):
+            for bad in ({}, {**valid,'Origin':'https://evil.invalid'}, {**valid,'Host':'evil.invalid'}, {**valid,'X-Wizard-Request':''}, {**valid,'Sec-Fetch-Site':'cross-site'}, {**valid,'X-Forwarded-For':'10.252.4.10'}):
                 self.assertEqual(call('POST','/api/private-clients',bad,'{"agent":"probe"}')[0],403)
                 self.assertEqual(call('DELETE','/api/private-clients/probe',bad)[0],403)
             code, body=call('POST','/api/private-clients',valid,'{"agent":"probe"}')
