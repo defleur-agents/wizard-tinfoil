@@ -30,7 +30,9 @@ services:
       is_main: true
       internal_port: 18804
 volumes:
-  tinfoil-private-data: {}
+  # Fixed name: the saved key survives updates, reinstalls and recipe changes.
+  tinfoil-private-data:
+    name: wizard-tinfoil-private-data
 x-runtipi:
   schema_version: 2
   overrides: []
