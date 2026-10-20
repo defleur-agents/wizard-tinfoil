@@ -96,6 +96,44 @@ The compose digest deliberately remains the previously published image:
 Miguel must publish/re-pin 0.3.0 using the existing release workflow after review;
 this branch does not invent or overwrite a registry digest.
 
+## Runtime-owned declared-host egress
+
+The provider recipe now starts on an internal/no-host-address bootstrap network,
+with `restart: no`, external DNS directed to its own loopback, and
+`HTTPS_PROXY=http://wizard-egress-proxy:3128`. The Agent Service egress lane
+creates/owns its two internal relay/egress networks and one system edge, removes
+bootstrap/other interfaces and preserves only fixed incoming owner routes. This
+requires its reviewed system helper and loopback-only effective port bindings;
+App Manager installation/update must invoke reconciliation before exposing the app.
+The old published image digest is intentionally not presented as this new image.
+
+Relay `http.client` now explicitly uses CONNECT; it never silently ignores the
+proxy. The decrypting gateway's pinned official Python SDK gets a narrowly scoped
+transport adapter because its custom `httpx.HTTPTransport` otherwise ignores proxy
+env. All attestation/certificate/provenance/HPKE verification remains enabled.
+SDK bundle fetch and Sigstore/TUF's requests fetches honor the proxy directly.
+
+Default ATC GET bundles sometimes select `router-0.tinfoil.sh`. To keep an exact
+allowlist, both paths request an attestation bundle specifically for
+`inference.tinfoil.sh` / `tinfoilsh/confidential-model-router`. The client still uses
+**GET /attestation** with its relay bearer; the relay internally makes a fixed
+**POST** to ATC. Only this constant public attestation request is generated; client
+ciphertext is still forwarded unchanged, unparsed and undecrypted. A bundle for a
+new/undeclared enclave fails closed rather than enabling a wildcard.
+
+`private_inference.egress` adds just **`tuf-repo-cdn.sigstore.dev`** alongside ATC
+and inference. A fresh Python SDK's live Sigstore TUF refresh requires that host
+(including on Connect/Test); blocking it produced `TUFError`/CONNECT 403. Complete
+bundles avoid AMD/GitHub lookups; no Rekor/Fulcio/dashboard browser hosts are added.
+Legacy internal Hermes-dashboard registration may report unavailable under this
+seal, and is not a reason to grant provider internet or host access.
+
+The actual PR #16 `wizard-private-client` image was exercised through this PR's
+relay behind the declared-host proxy, with a real saved key and completion. The
+older relay-only probe above is not the egress proof; the reproducible final proof
+is `wizard-agent-service` `ops/agent-runtime/prove_provider_egress.py` and its
+`PRIVATE_PROVIDER_EGRESS.md`. Local providers get no CONNECT listener/proxy.
+
 ## Packaging and verification
 The recipe uses uid 1000, a read-only root filesystem, dropped capabilities, no-new-privileges, and only its own named private data volume. Runtipi recursively chmods bind-mounted app-data during lifecycle actions; the named volume keeps credential permissions outside that operation. Images are published for amd64 and arm64.
 
