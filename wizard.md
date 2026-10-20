@@ -35,7 +35,7 @@ private_inference:
   kind: attested-relay
   client: tinfoil
   relay_port: 8090
-  egress: [inference.tinfoil.sh, atc.tinfoil.sh]
+  egress: [inference.tinfoil.sh, atc.tinfoil.sh, tuf-repo-cdn.sigstore.dev]
 system: true
 uses: [hermes-agent]
 needs: []
