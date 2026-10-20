@@ -18,7 +18,12 @@ def run(action, request, factory=None):
             if not models: raise ValueError('No models')
             return {'models':models, 'verifiedAt':datetime.datetime.now(datetime.timezone.utc).isoformat()}
         if action != 'infer': raise ValueError('Invalid action')
-        result = client.chat.completions.create(**request['payload'])
+        payload = dict(request['payload'])
+        # Kimi K3 on Tinfoil accepts only low/high/max; agents default to medium. Map to the nearest supported level.
+        if str(payload.get('model','')).startswith('kimi-k3') and payload.get('reasoning_effort') not in (None,'low','high','max'):
+            payload['reasoning_effort'] = {'none':'low','minimal':'low','medium':'high','xhigh':'max'}.get(payload['reasoning_effort'],'high')
+        extra = {k: payload.pop(k) for k in ('thinking','reasoning','chat_template_kwargs','top_k','min_p','repetition_penalty') if k in payload}
+        result = client.chat.completions.create(**payload, **({'extra_body': extra} if extra else {}))
         if request['payload'].get('stream'):
             return {'sse': ''.join('data: '+chunk.model_dump_json()+'\n\n' for chunk in result)+'data: [DONE]\n\n'}
         return result.model_dump(mode='json')

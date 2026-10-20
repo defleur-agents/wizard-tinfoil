@@ -50,6 +50,11 @@ def worker(action, key, payload=None):
     if result.returncode: raise ValueError('Verification or provider request failed. Saved connection unchanged.')
     return json.loads(result.stdout)
 
+# Standard chat-completions fields, plus model hints OpenAI-compatible agents send. None can change the
+# enclave, URL, headers or key; extras ride in the SDK's extra_body (provider.py).
+CHAT_FIELDS = {'model','messages','temperature','top_p','max_tokens','max_completion_tokens','tools','tool_choice','parallel_tool_calls','stop','response_format','stream','stream_options','seed','presence_penalty','frequency_penalty','reasoning_effort','prompt_cache_key','user','n','logprobs','top_logprobs','logit_bias'}
+BODY_EXTRAS = {'thinking','reasoning','chat_template_kwargs','top_k','min_p','repetition_penalty'}
+
 def key_ok(k): return isinstance(k,str) and 16 <= len(k) <= 512 and all(33<=ord(c)<=126 for c in k)
 
 TOOLS = [{'name':'connection_status','description':'Read Tinfoil connection and attestation status. Never returns credentials. To connect, the owner enters a key in the Tinfoil app; do not request keys in chat.','inputSchema':{'type':'object','properties':{},'additionalProperties':False},'annotations':{'readOnlyHint':True}}]
@@ -131,8 +136,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not s: return self.send(409,{'error':'Tinfoil is not connected.'})
                 if not isinstance(body.get('messages'),list) or not body['messages'] or body.get('model') not in s['models']: return self.send(400,{'error':'Choose a connected Tinfoil model and supply messages.'})
                 # SDK owns transport; callers cannot override enclave, URL, headers or key.
-                allowed={'model','messages','temperature','top_p','max_tokens','max_completion_tokens','tools','tool_choice','parallel_tool_calls','stop','response_format','stream','stream_options','seed','presence_penalty','frequency_penalty'}
-                if set(body)-allowed or body.get('stream') not in (None,False,True): raise ValueError()
+                # Body fields only: agents (Hermes) add reasoning/thinking/cache hints per model.
+                allowed=CHAT_FIELDS|BODY_EXTRAS
+                unknown=sorted(set(body)-allowed)
+                if unknown: return self.send(400,{'error':'Unsupported request field(s): '+', '.join(k[:40] for k in unknown[:8])})
+                if body.get('stream') not in (None,False,True): raise ValueError()
                 result=worker('infer',s['key'],body)
                 with LOCK:
                     current=stored()
