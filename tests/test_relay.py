@@ -111,6 +111,8 @@ class RelayTests(unittest.TestCase):
                 headers['X-Tinfoil-Enclave-Url']='https://evil.invalid'
                 self.assertEqual(call('/v1/chat/completions','POST',b'PRIVPROBE-unit',headers)[0],400)
                 self.assertEqual(call('/attestation', headers={'Authorization':'Bearer '+token})[0],200)
+                self.assertIn(('request','POST','/attestation'),calls)
+                self.assertIn(('body',b'{"enclaveUrl":"https://inference.tinfoil.sh","repo":"tinfoilsh/confidential-model-router"}'),calls)
                 headers['X-Tinfoil-Enclave-Url']='https://inference.tinfoil.sh'
                 (s.DATA/'connection.json').unlink()
                 self.assertEqual(call('/v1/chat/completions','POST',b'ciphertext',headers)[0],503)

@@ -25,7 +25,7 @@ def proxy_client(api_key, timeout):
             transport = httpx.HTTPTransport(proxy=os.environ.get('HTTPS_PROXY') or os.environ['https_proxy'])
             return EHBPTransport.from_public_key_hex(key, inner=transport)
 
-    secure = ProxySecureClient(attestation_bundle_url='https://atc.tinfoil.sh')
+    secure = ProxySecureClient(enclave='inference.tinfoil.sh', repo='tinfoilsh/confidential-model-router', attestation_bundle_url='https://atc.tinfoil.sh')
     http = secure.make_secure_http_client()  # official verification, fail closed
     result = TinfoilAI.__new__(TinfoilAI)
     result._secure_client = secure
