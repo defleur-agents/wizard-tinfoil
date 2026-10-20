@@ -6,6 +6,7 @@ read1/flush avoids waiting for a full buffer during encrypted response streams.
 import fcntl
 import http.client
 import ipaddress
+import os
 import re
 import socket
 import struct
@@ -65,6 +66,21 @@ class RelayServer(ThreadingHTTPServer):
     def handle_error(self, request, client_address):
         # A transport exception can contain headers or payload; never trace it.
         pass
+
+
+def upstream_connection(host):
+    """TLS stays end-to-end; http.client does not implement proxy env itself."""
+    proxy = os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy')
+    if not proxy:
+        return http.client.HTTPSConnection(host, timeout=180)
+    value = urlsplit(proxy)
+    if (value.scheme != 'http' or not value.hostname or value.username is not None
+            or value.password is not None or value.path not in ('', '/')
+            or value.query or value.fragment):
+        raise ValueError('Invalid HTTPS proxy')
+    upstream = http.client.HTTPSConnection(value.hostname, value.port or 80, timeout=180)
+    upstream.set_tunnel(host, 443)
+    return upstream
 
 
 def make_server(address, token_ok, connection):
@@ -153,7 +169,7 @@ def make_server(address, token_ok, connection):
             self.forward(host, self.path, saved['key'])
 
         def forward(self, host, path, key=None):
-            upstream = http.client.HTTPSConnection(host, timeout=180)
+            upstream = upstream_connection(host)
             started = False
             self.close_connection = True
             try:
