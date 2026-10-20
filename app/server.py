@@ -7,6 +7,9 @@ import subprocess
 import sys
 import tempfile
 import threading
+import http.cookiejar
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -18,7 +21,23 @@ LOCK = threading.RLock()
 TYPES = {'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript'}
 def csv(k): return {v.strip().lower() for v in os.environ.get(k,'').split(',') if v.strip()}
 HOSTS = csv('WIZARD_TRUSTED_HOSTS') | {f'127.0.0.1:{PORT}',f'localhost:{PORT}',f'wizard-tinfoil:{PORT}'}
+APP_PORT = os.environ.get('APP_PORT') or PORT
+HOSTS |= {f'127.0.0.1:{APP_PORT}', f'localhost:{APP_PORT}'}
 ORIGINS = csv('WIZARD_TRUSTED_ORIGINS') | {'http://'+h for h in HOSTS if h.startswith(('localhost:','127.0.0.1:'))}
+
+# The agent on this box (Hermes). Fresh installs reach the Hermes Agent app by name; alongside boxes get the host
+# dashboard address from the App Manager. Connect registers this app's local gateway as a Hermes custom provider:
+# Hermes gets only the box-only gateway bearer, never the Tinfoil key, and its default model is never changed.
+DEFAULT_HERMES = 'http://hermes-agent:9119'
+HERMES_URL = (os.environ.get('WIZARD_TINFOIL_HERMES_URL') or DEFAULT_HERMES).rstrip('/')
+HERMES_USER = os.environ.get('HERMES_DASHBOARD_BASIC_AUTH_USERNAME') or 'hermes'
+HERMES_PASSWORD = os.environ.get('HERMES_DASHBOARD_BASIC_AUTH_PASSWORD', '')
+AGENT_BASE = os.environ.get('WIZARD_TINFOIL_AGENT_URL') or (f'http://wizard-tinfoil:{PORT}/v1' if HERMES_URL == DEFAULT_HERMES else f'http://127.0.0.1:{APP_PORT}/v1')
+ENDPOINT_ID = 'wizard-tinfoil'
+# Tinfoil also serves embeddings, speech and tools; only chat models belong in the agent's model list.
+NOT_CHAT = ('embed', 'tts', 'whisper', 'voxtral', 'doc-upload', 'pii-filter', 'websearch', 'safeguard')
+PREFERRED = ('kimi-k3', 'glm-5-3', 'deepseek-v4-1-flash', 'gpt-oss-120b', 'llama3-3-70b')
+def chat_models(models): return [m for m in models if not any(x in m for x in NOT_CHAT)]
 
 def atomic(name, obj):
     DATA.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -39,10 +58,35 @@ def stored():
     try: return json.loads((DATA/'connection.json').read_text())
     except FileNotFoundError: return None
 
+def agent_call(method, path, body=None):
+    """One signed-in call to the agent's dashboard. Errors never carry credentials."""
+    if not HERMES_PASSWORD: raise RuntimeError('agent dashboard login missing')
+    jar = http.cookiejar.CookieJar(); op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    login = urllib.request.Request(HERMES_URL+'/auth/password-login', data=json.dumps({'provider':'basic','username':HERMES_USER,'password':HERMES_PASSWORD}).encode(), method='POST', headers={'Content-Type':'application/json'})
+    with op.open(login, timeout=20) as r: r.read()
+    req = urllib.request.Request(HERMES_URL+path, data=None if body is None else json.dumps(body).encode(), method=method, headers={'Content-Type':'application/json'} if body is not None else {})
+    with op.open(req, timeout=40) as r: return json.loads(r.read() or b'{}')
+
+def register(models):
+    """Add (or refresh) Tinfoil in the agent's model list. Returns 'registered' or 'unavailable'."""
+    chat = chat_models(models)
+    if not chat: return 'unavailable'
+    model = next((m for m in PREFERRED if m in chat), chat[0])
+    token = json.loads((DATA/'gateway-token.json').read_text())['token']
+    try:
+        agent_call('POST', '/api/providers/custom-endpoints', {'id':ENDPOINT_ID,'name':'Tinfoil','base_url':AGENT_BASE,'model':model,'models':[model],'api_key':token,'api_mode':'chat_completions','discover_models':False,'make_default':False})
+        return 'registered'
+    except Exception:
+        return 'unavailable'
+
+def unregister():
+    try: agent_call('DELETE', f'/api/providers/custom-endpoints/{ENDPOINT_ID}')
+    except Exception: pass
+
 def status():
     # Atomic replace makes this a safe snapshot; never wait behind network verification.
     s = stored()
-    return {'contract':'wizard.ai-connection/1','provider':'tinfoil','name':'Tinfoil','status':'connected' if s and s.get('authenticated') else 'not_connected','credentialStored':bool(s),'credentialVerified':bool(s and s.get('authenticated')),'plan':None,'account':None,'usage':None,'error':None,'models':s['models'] if s else [],'verification':{'mode':'official-sdk-attestation','sdk':'tinfoil==0.14.0','lastVerifiedAt':s['verifiedAt'] if s else None},'chatIntegration':'not_registered'}
+    return {'contract':'wizard.ai-connection/1','provider':'tinfoil','name':'Tinfoil','status':'connected' if s and s.get('authenticated') else 'not_connected','credentialStored':bool(s),'credentialVerified':bool(s and s.get('authenticated')),'plan':None,'account':None,'usage':None,'error':None,'models':s['models'] if s else [],'verification':{'mode':'official-sdk-attestation','sdk':'tinfoil==0.14.0','lastVerifiedAt':s['verifiedAt'] if s else None},'chatIntegration':(s or {}).get('agent','not_registered')}
 
 def worker(action, key, payload=None):
     # Kill on timeout; no upstream exception/headers/body may reach logs or clients.
@@ -115,6 +159,7 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     result=worker('verify',body['apiKey'])
                     atomic('connection.json',{'key':body['apiKey'],'authenticated':False,**result})
+                    atomic('connection.json',{**stored(),'agent':register(result['models'])})
                 return self.send(200,status())
             if path=='/api/test':
                 if body: raise ValueError()
@@ -122,11 +167,13 @@ class Handler(BaseHTTPRequestHandler):
                     s=stored()
                     if not s: return self.send(409,{'error':'Connect an API key first.'})
                     result=worker('verify',s['key']); atomic('connection.json',{**s,**result})
+                    atomic('connection.json',{**stored(),'agent':register(result['models'])})
                 return self.send(200,status())
             if path=='/api/disconnect':
                 if body: raise ValueError()
                 with LOCK:
                     (DATA/'connection.json').unlink(missing_ok=True)
+                    unregister()
                     # Keep the box-only app credential stable across provider logout.
                     # Removing connection.json immediately disables all inference.
 
@@ -158,6 +205,13 @@ def initialize():
     DATA.mkdir(mode=0o700,parents=True,exist_ok=True); os.chmod(DATA,0o700)
     if not (DATA/'gateway-token.json').exists(): atomic('gateway-token.json',{'token':secrets.token_urlsafe(48)})
 
+def reconcile():
+    """A saved key whose agent registration is missing (older version, agent installed later): register it."""
+    with LOCK:
+        s = stored()
+        if s and s.get('agent') != 'registered': atomic('connection.json',{**s,'agent':register(s.get('models') or [])})
+
 if __name__=='__main__':
     initialize()
+    threading.Thread(target=reconcile, daemon=True).start()
     ThreadingHTTPServer((os.environ.get('BIND','0.0.0.0'),int(PORT)),Handler).serve_forever()

@@ -4,8 +4,9 @@ id: wizard-tinfoil
 name: Tinfoil
 type: external
 category: system
-version: 0.1.0
-summary: Connect your Tinfoil API key.
+version: 0.2.0
+summary: Private AI. Connect your Tinfoil API key and your agent gets a private, enclave-verified model.
+tags: [security]
 license: GPL-3.0-only
 source: https://github.com/oscarhenrycollins/wizard-tinfoil
 runtime:
@@ -30,11 +31,11 @@ view:
     dist: web
 provides: [ai-connection, tinfoil-api-key]
 system: true
-uses: []
+uses: [hermes-agent]
 needs: []
 health: /healthz
 icon: icon.png
 ---
 
 # Tinfoil
-Owner-only installed app, not publicly listed. The source link identifies the official SDK dependency, not a published Wizard app repository. Connect / Test / Disconnect own one Tinfoil login. The API key is never returned. Read-only MCP uses wizard.ai-connection/1. Chat model registration is deliberately not performed.
+Private AI inference for your Wizard. Paste a Tinfoil API key and Connect: the app checks Tinfoil's secure enclave with the official SDK and adds a private model to your agent's model list. The key never leaves this app; the agent gets a local token for this box only. Disconnect removes both.

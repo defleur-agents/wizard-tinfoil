@@ -1,0 +1,17 @@
+name: Publish to the Wizard App Index
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recipe uses the store-built image (humanitylabs-org/wizard-app-store tinfoil.yml)
+        run: grep -q 'image: ghcr.io/humanitylabs-org/wizard-tinfoil:' runtipi/docker-compose.yml
+      - name: Publish (the index re-reads this repo and runs the wizard.md check)
+        run: |
+          curl -sS --fail-with-body -X POST https://apps.aiwizards.com/v1/publish \
+            -H 'content-type: application/json' \
+            -d "{\"repo\":\"${{ github.repository }}\"}"

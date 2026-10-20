@@ -22,6 +22,8 @@ def run(action, request, factory=None):
         # Kimi K3 on Tinfoil accepts only low/high/max; agents default to medium. Map to the nearest supported level.
         if str(payload.get('model','')).startswith('kimi-k3') and payload.get('reasoning_effort') not in (None,'low','high','max'):
             payload['reasoning_effort'] = {'none':'low','minimal':'low','medium':'high','xhigh':'max'}.get(payload['reasoning_effort'],'high')
+        # DeepSeek V4.1 Flash on Tinfoil rejects a reasoning effort; send none.
+        if payload.get('model') == 'deepseek-v4-1-flash': payload.pop('reasoning_effort', None)
         extra = {k: payload.pop(k) for k in ('thinking','reasoning','chat_template_kwargs','top_k','min_p','repetition_penalty') if k in payload}
         result = client.chat.completions.create(**payload, **({'extra_body': extra} if extra else {}))
         if request['payload'].get('stream'):

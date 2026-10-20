@@ -1,6 +1,13 @@
-# Tinfoil — owner-only Wizard connection
+# Tinfoil: private AI for your Wizard
 
-Installed from this private repository with `wam install oscarhenrycollins/wizard-tinfoil`. Not publicly listed. The app does not edit Hermes configuration; model registration is a separate owner-approved integration with the same agent.
+Install from the Wizard App Store (`wam install wizard-tinfoil`). Open Tinfoil, paste an API key from https://dash.tinfoil.sh and tap Connect. Your agent gets a private Tinfoil model in its model picker; your default model does not change. Disconnect removes the key and the model.
+
+Image source and CI: `humanitylabs-org/wizard-app-store` `images/wizard-tinfoil` (published only after its tests pass, amd64 and arm64).
+
+## Agent registration
+On Connect (and on start, if a key is saved) the app adds itself to the agent through the stock Hermes dashboard API (`POST /api/providers/custom-endpoints`, `make_default: false`, one chat model: Kimi K3 when available). Hermes receives only this box's local gateway token, never the Tinfoil key. The dashboard login is filled in by the App Manager from the Hermes Agent app (fresh installs) or the host dashboard (alongside installs). If the agent can't be reached, the key is still saved and status shows `chatIntegration: unavailable`; it retries on the next Test or restart.
+
+The gateway accepts the request fields agents send (reasoning effort, thinking, cache key) and maps Kimi K3's unsupported `medium` effort to `high`.
 
 ## Owner workflow
 Open Tinfoil in the Wizard launcher, create an inference API key at https://dash.tinfoil.sh, paste it in the masked field, and Connect. The field clears immediately. Test rechecks the enclave and model catalog without inference. Disconnect deletes the provider key; the independent box-only gateway bearer remains stable so reconnecting does not break the agent's registration. No page, GET or MCP returns either credential.
@@ -20,7 +27,7 @@ Host/Origin allowlists prevent DNS rebinding and cross-site writes. Browser muta
 Streaming is currently **buffered SSE**, not real-time token streaming. Tool-call fields and non-streaming completions pass through the official SDK. No Responses, embedding or audio gateway is implemented. Disconnect blocks new requests; already admitted requests may finish. The `chatIntegration` status field is app-local and does not inspect external Hermes registration.
 
 ## Packaging and verification
-Production uses a private owner-host loopback registry image plus the dependency-bearing inline recipe. Runtipi removes local-only tags during installation, so a registry-pullable reference is required. The recipe uses uid 1000, a read-only root filesystem, dropped capabilities, no-new-privileges, and only its own named private data volume. Runtipi recursively chmods bind-mounted app-data during lifecycle actions; the named volume keeps credential permissions outside that operation. Only amd64 has been exercised; no multi-architecture claim is made.
+The recipe uses uid 1000, a read-only root filesystem, dropped capabilities, no-new-privileges, and only its own named private data volume. Runtipi recursively chmods bind-mounted app-data during lifecycle actions; the named volume keeps credential permissions outside that operation. Images are published for amd64 and arm64.
 
 `wam check . --proposal` passes. Run the six unit tests in the actual image with the entire source mounted at `/qa`, then `python -m unittest discover -s /qa/tests -v`; these cover local auth, safe state, CSRF/DNS/forwarding guards, persistence, SDK use, and real SDK attestation rejection before HTTP. Doubles are application control-flow tests, not cryptographic proof.
 

@@ -103,4 +103,42 @@ class Tests(unittest.TestCase):
                 p.run('infer',{'key':KEY,'payload':{'model':'test-model','messages':[{'role':'user','content':'synthetic'}]}})
             sent.assert_not_called()
 
+    def test_07_connect_registers_agent_model_without_upstream_key(self):
+        calls=[]
+        def fake(method,path,body=None):calls.append((method,path,body));return {}
+        models=['deepseek-v4-1-flash','glm-5-3','kimi-k3','nomic-embed-text','whisper-large-v3-turbo','websearch']
+        with patch.object(s,'worker',return_value={'models':models,'verifiedAt':'t'}), patch.object(s,'agent_call',side_effect=fake):
+            code,b=self.call('/api/connect',{'apiKey':KEY});self.assertEqual(code,200)
+            self.assertEqual(json.loads(b)['chatIntegration'],'registered')
+        (m,path,body),=calls
+        self.assertEqual((m,path),('POST','/api/providers/custom-endpoints'))
+        self.assertEqual(body['model'],'kimi-k3');self.assertEqual(body['models'],['kimi-k3'])
+        self.assertFalse(body['make_default']);self.assertFalse(body['discover_models'])
+        token=json.loads((s.DATA/'gateway-token.json').read_text())['token']
+        self.assertEqual(body['api_key'],token);self.assertNotIn(KEY,json.dumps(body))
+        self.assertTrue(body['base_url'].endswith('/v1'))
+        self.assertEqual(s.chat_models(models),['deepseek-v4-1-flash','glm-5-3','kimi-k3'])
+        calls.clear()
+        with patch.object(s,'agent_call',side_effect=fake):self.assertEqual(self.call('/api/disconnect',{})[0],200)
+        self.assertEqual(calls[0][:2],('DELETE','/api/providers/custom-endpoints/wizard-tinfoil'))
+    def test_08_agent_unreachable_keeps_key_and_reports_it(self):
+        with patch.object(s,'worker',return_value={'models':['kimi-k3'],'verifiedAt':'t'}), patch.object(s,'agent_call',side_effect=OSError('down')):
+            code,b=self.call('/api/connect',{'apiKey':KEY});self.assertEqual(code,200)
+            d=json.loads(b);self.assertTrue(d['credentialStored']);self.assertEqual(d['chatIntegration'],'unavailable')
+        with patch.object(s,'agent_call',return_value={}):s.reconcile()
+        self.assertEqual(s.status()['chatIntegration'],'registered')
+        with patch.object(s,'agent_call',return_value={}):self.call('/api/disconnect',{})
+    def test_09_agent_request_fields_and_kimi_effort(self):
+        seen={}
+        class Client:
+            def __init__(self,**kw):
+                from types import SimpleNamespace as NS
+                self.client=NS(close=lambda:None)
+                def create(**kw):seen.update(kw);return NS(model_dump=lambda **k:{'object':'chat.completion'})
+                self.chat=NS(completions=NS(create=create))
+        p.run('infer',{'key':KEY,'payload':{'model':'kimi-k3','messages':[{'role':'user','content':'x'}],'reasoning_effort':'medium','thinking':{'type':'enabled'}}},Client)
+        self.assertEqual(seen['reasoning_effort'],'high');self.assertEqual(seen['extra_body'],{'thinking':{'type':'enabled'}});self.assertNotIn('thinking',seen)
+        seen.clear();p.run('infer',{'key':KEY,'payload':{'model':'deepseek-v4-1-flash','messages':[],'reasoning_effort':'medium'}},Client)
+        self.assertNotIn('reasoning_effort',seen)
+
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -3,7 +3,8 @@ import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 BASE='http://127.0.0.1:18803'
-OUT=Path('/home/oscar/.hermes/cache/scratch/tinfoil-evidence');OUT.mkdir(exist_ok=True)
+import os
+OUT=Path(os.environ.get('QA_OUT','qa-evidence'));OUT.mkdir(exist_ok=True)
 with sync_playwright() as p:
     b=p.chromium.launch(headless=True)
     page=b.new_page(viewport={'width':390,'height':844})
