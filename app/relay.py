@@ -145,7 +145,9 @@ def make_server(address, token_ok, connection):
         def do_GET(self):
             if not self.admitted(): return
             if self.path != '/attestation': return self.reply(404)
-            self.forward('atc.tinfoil.sh', '/attestation')
+            # Default ATC GET may select an undeclared random router-N host.
+            # Request the declared enclave; the client still verifies domain binding.
+            self.forward('atc.tinfoil.sh', '/attestation', bundle=True)
 
         def do_POST(self):
             if not self.admitted(): return
@@ -168,14 +170,15 @@ def make_server(address, token_ok, connection):
             if not saved or not saved.get('key'): return self.reply(503)
             self.forward(host, self.path, saved['key'])
 
-        def forward(self, host, path, key=None):
+        def forward(self, host, path, key=None, bundle=False):
             upstream = upstream_connection(host)
             started = False
             self.close_connection = True
             try:
-                upstream.putrequest(self.command, path)
+                bundle_body = b'{"enclaveUrl":"https://inference.tinfoil.sh","repo":"tinfoilsh/confidential-model-router"}'
+                upstream.putrequest('POST' if bundle else self.command, path)
                 upstream.putheader('Connection', 'close')
-                for name in ('Content-Type', 'Accept', 'Ehbp-Encapsulated-Key'):
+                for name in (() if bundle else ('Content-Type', 'Accept', 'Ehbp-Encapsulated-Key')):
                     values = self.headers.get_all(name, [])
                     if len(values) > 1: raise ValueError('Duplicate header')
                     if values: upstream.putheader(name, values[0])
@@ -183,7 +186,12 @@ def make_server(address, token_ok, connection):
                     upstream.putheader('Authorization', 'Bearer '+key)
                     chunked = bool(self.headers.get('Transfer-Encoding'))
                     upstream.putheader('Transfer-Encoding' if chunked else 'Content-Length', 'chunked' if chunked else self.headers['Content-Length'])
+                if bundle:
+                    upstream.putheader('Content-Type', 'application/json')
+                    upstream.putheader('Content-Length', str(len(bundle_body)))
                 upstream.endheaders()
+                if bundle:
+                    upstream.send(bundle_body)
                 if key:
                     for chunk in self.body_chunks():
                         if chunked: upstream.send(f'{len(chunk):x}\r\n'.encode())
