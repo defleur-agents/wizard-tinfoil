@@ -59,12 +59,13 @@ def docker(*args, input=None, check=True):
 def main():
     parser=argparse.ArgumentParser(); parser.add_argument('--key-env',required=True)
     parser.add_argument('--subnet',default='10.252.241.0/24')
+    parser.add_argument('--egress-subnet',default='10.253.241.0/24',help='Management listener binds this runtime-pool interface; component test only, not runtime egress-policy proof')
     args=parser.parse_args()
     codeword='PRIVPROBE-'+secrets.token_hex(16)
     capture=None
     try:
         docker('network','create','--internal','--subnet',args.subnet,NETWORK)
-        docker('network','create',EGRESS)
+        docker('network','create','--subnet',args.egress_subnet,EGRESS)
         docker('run','-d','--name',APP,'--network',EGRESS,'--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--tmpfs','/data:rw,uid=1000,gid=1000,mode=700','--tmpfs','/tmp:rw,uid=1000,gid=1000','-p','127.0.0.1::18804',IMAGE)
         docker('network','connect','--alias','wizard-tinfoil-relay',NETWORK,APP)
         port=int(docker('port',APP,'18804/tcp').stdout.strip().rsplit(':',1)[1])
