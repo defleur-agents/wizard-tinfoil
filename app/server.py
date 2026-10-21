@@ -238,6 +238,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         if self.command!='HEAD': self.wfile.write(b)
     def refused(self,path,write=False):
+        if self.client_address[0].startswith('10.252.'):
+            self.send(403,{'error':'Box-only endpoint.'}); return True
         if self.headers.get('Host','').lower() not in HOSTS: self.send(403,{'error':'Untrusted host.'}); return True
         origin=self.headers.get('Origin','').lower()
         if origin and origin not in ORIGINS or self.headers.get('Sec-Fetch-Site')=='cross-site': self.send(403,{'error':'Cross-site request refused.'}); return True
@@ -387,4 +389,4 @@ if __name__=='__main__':
     private_relay = relay.make_server(('0.0.0.0',8090),private_token_ok,stored)
     threading.Thread(target=private_relay.serve_forever, daemon=True).start()
     threading.Thread(target=reconcile, daemon=True).start()
-    ThreadingHTTPServer((os.environ.get('BIND','0.0.0.0'),int(PORT)),Handler).serve_forever()
+    ThreadingHTTPServer((relay.management_bind(),int(PORT)),Handler).serve_forever()

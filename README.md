@@ -166,3 +166,13 @@ Generate **synthetic speech only**, e.g. with ffmpeg's `flite` filter, at 16 kHz
 The 0.4.0 recipe points to the next store-built image tag. Release CI must build/publish both architectures from this source and pin its resulting digest before deployment; this source PR does not publish or deploy that image.
 
 Official docs: https://docs.tinfoil.sh/sdk/python-sdk , https://docs.tinfoil.sh/sdk/overview , https://docs.tinfoil.sh/tutorials/coding-agents . Wizard contract: `humanitylabs-org/wizard-os` `spec/AI_CONNECTIONS.md`.
+
+### Per-agent relay topology
+
+The runtime attaches one internal 10.252.x.0/24 relay bridge per linked agent.
+The relay admits peers only from the actual attached /24s (not the entire pool)
+and still requires a per-agent bearer on every relay request. Management listens
+only on the runtime-owned 10.253.x.x egress address; it never binds the relay
+interfaces. HTTP Host/Origin spoofing cannot expose /api/private-clients to a
+relay client. A missing/ambiguous management interface fails closed. No owner
+sudo, br_netfilter module or bridged private-client firewall is required.
