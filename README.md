@@ -139,3 +139,13 @@ The recipe uses uid 1000, a read-only root filesystem, dropped capabilities, no-
 Production checks exercised the actual Wizard launcher iframe at phone and desktop widths on all three owner shell ports: masked input, successful real free attestation/catalog read with an explicitly synthetic invalid key, pending authentication, Test, Disconnect, no page errors or horizontal overflow, and live hosted theme handshake. The synthetic key was removed. Restart preserved the independent bearer and left provider credentials absent. No paid inference was performed.
 
 Official docs: https://docs.tinfoil.sh/sdk/python-sdk , https://docs.tinfoil.sh/sdk/overview , https://docs.tinfoil.sh/tutorials/coding-agents . Wizard contract: `humanitylabs-org/wizard-os` `spec/AI_CONNECTIONS.md`.
+
+### Per-agent relay topology
+
+The runtime attaches one internal 10.252.x.0/24 relay bridge per linked agent.
+The relay admits peers only from the actual attached /24s (not the entire pool)
+and still requires a per-agent bearer on every relay request. Management listens
+only on the runtime-owned 10.253.x.x egress address; it never binds the relay
+interfaces. HTTP Host/Origin spoofing cannot expose /api/private-clients to a
+relay client. A missing/ambiguous management interface fails closed. No owner
+sudo, br_netfilter module or bridged private-client firewall is required.

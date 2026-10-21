@@ -59,6 +59,25 @@ class RelayTests(unittest.TestCase):
             self.assertFalse(r.peer_allowed('10.252.4.10'))
         self.assertTrue(all(n.subnet_of(ipaddress.ip_network('10.252.0.0/16')) for n in r.interface_networks()))
 
+    def test_multiple_agent_subnets_are_admitted_but_not_the_pool(self):
+        with patch.object(s.relay, 'interface_networks', return_value=[ipaddress.ip_network('10.252.4.0/24'),ipaddress.ip_network('10.252.5.0/24')]):
+            self.assertTrue(s.relay.peer_allowed('10.252.4.3'))
+            self.assertTrue(s.relay.peer_allowed('10.252.5.3'))
+            self.assertFalse(s.relay.peer_allowed('10.252.6.3'))
+
+    def test_management_bind_never_wildcard_or_relay(self):
+        with patch.object(s.relay.socket, 'if_nameindex', return_value=[]):
+            with self.assertRaises(RuntimeError): s.relay.management_bind()
+        self.assertIn('relay.management_bind()', (ROOT/'app/server.py').read_text())
+
+    def test_management_refuses_relay_peer_even_with_owner_headers(self):
+        handler = object.__new__(s.Handler)
+        handler.client_address = ('10.252.4.3', 1234)
+        handler.headers = {'Host':'localhost:18804','Origin':'http://localhost:18804','X-Wizard-Request':'1'}
+        with patch.object(handler, 'send') as send:
+            self.assertTrue(handler.refused('/api/private-clients', True))
+            self.assertEqual(send.call_args.args[0], 403)
+
     def test_strict_enclave_origin(self):
         for good in ('https://inference.tinfoil.sh', 'https://enclave-1.tinfoil.sh/', 'https://a.b.tinfoil.sh:443'):
             self.assertTrue(s.relay.enclave_host(good).endswith('.tinfoil.sh'))

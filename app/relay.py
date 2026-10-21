@@ -31,7 +31,7 @@ def interface_networks():
                 addr = socket.inet_ntoa(fcntl.ioctl(sock, 0x8915, request)[20:24])
                 mask = socket.inet_ntoa(fcntl.ioctl(sock, 0x891b, request)[20:24])
                 network = ipaddress.ip_network(f'{addr}/{mask}', strict=False)
-                if ipaddress.ip_address(addr) in POOL and network.subnet_of(POOL):
+                if ipaddress.ip_address(addr) in POOL and network.prefixlen == 24 and network.subnet_of(POOL):
                     networks.append(network)
             except (OSError, ValueError):
                 continue
@@ -222,3 +222,27 @@ def make_server(address, token_ok, connection):
                 upstream.close()
 
     return RelayServer(address, RelayHandler)
+
+
+def management_bind():
+    """Only the runtime egress-side ingress edge may reach the management server.
+
+    Bind by destination address, not spoofable HTTP Host/Origin headers. Before
+    runtime reconciliation the bootstrap is internal with no client members.
+    """
+    pool = ipaddress.ip_network('10.253.0.0/16')
+    addresses = []
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        for _, name in socket.if_nameindex():
+            request = struct.pack('256s', name.encode()[:15])
+            try:
+                addr = socket.inet_ntoa(fcntl.ioctl(sock, 0x8915, request)[20:24])
+                mask = socket.inet_ntoa(fcntl.ioctl(sock, 0x891b, request)[20:24])
+                network = ipaddress.ip_network(f'{addr}/{mask}', strict=False)
+                if network.prefixlen == 24 and network.subnet_of(pool):
+                    addresses.append(addr)
+            except (OSError, ValueError):
+                continue
+    if len(addresses) != 1:
+        raise RuntimeError('Runtime-owned management interface required')
+    return addresses[0]
