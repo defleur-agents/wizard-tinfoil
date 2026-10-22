@@ -2,7 +2,7 @@
 # reaches Tinfoil only through this app's box-only gateway (/v1) with a separate local token.
 services:
   wizard-tinfoil:
-    image: ghcr.io/humanitylabs-org/wizard-tinfoil:0.2.2@sha256:576da90337f345cf42b6e0a5d7d02e0c20814355e4634c7d7b5a57a8e7649ba1
+    image: ghcr.io/humanitylabs-org/wizard-tinfoil:0.3.0@sha256:de3cd331b28517c509fdf1f35fa27a629704c7073036ddeeec7b1e769396b41e
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]
