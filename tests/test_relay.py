@@ -165,7 +165,11 @@ class RelayTests(unittest.TestCase):
             self.assertEqual(call('DELETE','/api/private-clients/probe',valid)[0],204)
             self.assertFalse(s.private_token_ok(token))
             code, body=call('GET','/api/connection',{})
-            self.assertEqual(json.loads(body)['models'],[{'id':'kimi-k3','label':'kimi-k3'}])
+            connection = json.loads(body)
+            self.assertEqual(connection['contract'], 'wizard.ai-connection/2')
+            self.assertEqual(connection['models'], s.router_models(['kimi-k3','nomic-embed-text']))
+            self.assertEqual([m['id'] for m in connection['models']], ['kimi-k3'])
+            self.assertEqual(call('GET','/api/status',{})[0], 200)
         finally:
             http.shutdown(); http.server_close()
 

@@ -82,7 +82,7 @@ def router_infer(request, emit, factory=None):
     try:
         if factory is None:
             from tinfoil import TinfoilAI
-            factory = TinfoilAI
+            factory = proxy_client if os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy') else TinfoilAI
         client = factory(api_key=request['key'], timeout=30)
         client.client.max_retries = 0
         expected = request['payload']['model']

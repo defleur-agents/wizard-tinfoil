@@ -18,4 +18,16 @@ class ProxyTests(unittest.TestCase):
         for bad in ('https://proxy:3128','http://user:password@proxy:3128','http://proxy:3128/path'):
             with patch.dict(os.environ, {'HTTPS_PROXY':bad}, clear=True), self.assertRaises(ValueError):
                 relay.upstream_connection('inference.tinfoil.sh')
+    def test_router_uses_same_proxy_factory_and_never_falls_back(self):
+        provider_spec = importlib.util.spec_from_file_location('proxy_router_provider', Path(__file__).parents[1] / 'app/provider.py')
+        assert provider_spec is not None and provider_spec.loader is not None
+        provider = importlib.util.module_from_spec(provider_spec); provider_spec.loader.exec_module(provider)
+        for env, target in (({'HTTPS_PROXY':'http://wizard-egress-proxy:3128'}, 'proxy'), ({'https_proxy':'http://wizard-egress-proxy:3128'}, 'proxy'), ({}, 'legacy')):
+            events = []
+            with patch.dict(os.environ, env, clear=True), patch.object(provider, 'proxy_client', side_effect=RuntimeError('do not expose')) as proxied, patch('tinfoil.TinfoilAI', side_effect=RuntimeError('do not expose')) as legacy:
+                provider.router_infer({'key':'synthetic-key','payload':{'model':'kimi-k3'}}, events.append)
+                (proxied if target == 'proxy' else legacy).assert_called_once_with(api_key='synthetic-key', timeout=30)
+                (legacy if target == 'proxy' else proxied).assert_not_called()
+                self.assertEqual(events, [{'type':'error','code':'provider_error'}])
+
 if __name__=='__main__': unittest.main()
