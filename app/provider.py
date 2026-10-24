@@ -16,7 +16,11 @@ def run(action, request, factory=None):
         if action == 'verify':
             models = sorted({m.id for m in client.client.models.list().data})
             if not models: raise ValueError('No models')
-            return {'models':models, 'verifiedAt':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+            # Listing models alone does not prove the key; a one-token attested call does.
+            probe = 'deepseek-v4-1-flash' if 'deepseek-v4-1-flash' in models else next((m for m in models if not any(x in m for x in ('embed','whisper','voxtral','tts','realtime','audio'))), None)
+            if probe is None: raise ValueError('No chat model')
+            client.chat.completions.create(model=probe, messages=[{'role':'user','content':'ok'}], max_tokens=1)
+            return {'models':models, 'authenticated':True, 'verifiedAt':datetime.datetime.now(datetime.timezone.utc).isoformat()}
         if action != 'infer': raise ValueError('Invalid action')
         payload = dict(request['payload'])
         # Kimi K3 on Tinfoil accepts only low/high/max; agents default to medium. Map to the nearest supported level.
