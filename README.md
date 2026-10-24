@@ -47,8 +47,9 @@ idempotent). Both routes reuse the key-save route's Host/Origin and
 Agent IDs contain 1–128 letters, digits,
 underscores or hyphens and start with a letter/digit. Only SHA-256 token digests
 are persisted, atomically at mode 0600, in `private-clients.json`.
-`GET /api/connection` returns chat models as `[{id,label}]`; `/api/status`, MCP,
-and the legacy gateway retain their existing representations.
+`GET /api/connection` preserves PR #4's `wizard.ai-connection/2` catalog
+descriptors (`id,label,tier,abilities,context`); `/api/status`, MCP and the
+legacy gateway retain their existing representations.
 
 The relay requires that per-agent bearer for `GET /attestation` (forwarded to
 ATC) and `POST /v1/*`. POST additionally requires `Ehbp-Encapsulated-Key` and
@@ -60,10 +61,12 @@ never follows redirects, logs request bodies/headers or uses an SDK/decrypts.
 Missing key, transport failure and invalid admission fail closed. Revocation
 and Disconnect block new admissions; already admitted requests may finish.
 
-**SDK integration caveat:** official Python 0.14.0 and JavaScript 1.2.2 reject
-an HTTP attestation bundle URL and do not send the configured bearer during
-bundle fetching. The literal shared HTTP-relay client configuration therefore
-needs an explicit client-side transport adapter; it does not work unchanged.
+**SDK integration:** high-level official Python 0.14.0 and JavaScript 1.2.2
+clients reject an HTTP attestation bundle URL and do not send the relay bearer
+during bundle fetching. The published Private Client supplies the supported
+adapter: authenticated HTTP bundle fetch, official `Verifier.verifyBundle`,
+then official EHBP using only the verified HPKE key. It needs no HTTP-attestation
+bypass flag, custom CA or HTTPS loopback in production.
 Python also tries online Sigstore TUF refreshes even with a complete bundle.
 The live probe below uses the official JS SDK with a test-only loopback HTTPS
 attestation adapter and an ephemeral trusted CA, adding the token on the hop
@@ -92,9 +95,9 @@ app `/data` files. Only capture summary booleans/counts are emitted; packet
 payloads and tokens are not saved. Containers/networks are removed in `finally`;
 remove the two test image tags afterwards. No live installation is touched.
 
-The compose digest deliberately remains the previously published image:
-Miguel must publish/re-pin 0.3.0 using the existing release workflow after review;
-this branch does not invent or overwrite a registry digest.
+PR #4 advances the provider recipe to the future `0.4.0` image tag. Miguel
+must publish and digest-pin the combined provider source before deployment;
+this rebase does not merge, deploy or invent a provider image digest.
 
 ## Runtime-owned declared-host egress
 
@@ -176,3 +179,32 @@ only on the runtime-owned 10.253.x.x egress address; it never binds the relay
 interfaces. HTTP Host/Origin spoofing cannot expose /api/private-clients to a
 relay client. A missing/ambiguous management interface fails closed. No owner
 sudo, br_netfilter module or bridged private-client firewall is required.
+
+### Rebase and client release checkpoint
+
+This branch is stacked on PR #4 head `9a32d0869618b7855949aebd7aebff87ed215a14`,
+which descends from current main `cbfa896fdd1d484f9c96c44d8b5ad7c20dc3474e`.
+Review/land **#4 before #3**; #3 contains #4's commits until then. Keep both
+server imports, both sets of owner/Router handlers, live-transcription metadata
+and all OpenAPI paths. The v2 Router infer worker now selects the same proxy-aware
+verified SDK factory as the existing gateway when HTTPS_PROXY is present;
+without a proxy its original SDK selection is unchanged.
+
+The per-agent client is publicly available for linux/amd64 and linux/arm64:
+`ghcr.io/humanitylabs-org/wizard-private-client@sha256:c562bef2166e6e1054be8eed34229cf0ead4574002da28f8fe5d4f09ad0e6631`
+(source `c3a4345ff68363dfff7435f80344ca1a235624be`, store PR #16,
+[publication + anonymous pulls](https://github.com/humanitylabs-org/wizard-app-store/actions/runs/40115387940)).
+Agent Service must pin `ops/agent-runtime/private_providers.py:CLIENT_IMAGE`
+to that digest. Its separate integration lane owns that edit; this repo does not.
+
+**Deployment boundary:** gateway route contracts and the v2/Realtime unit suites
+are preserved, but the sealed recipe is an explicit network migration, not a
+safe stand-alone update for an existing gateway installation. Coordinate the
+runtime/installer reconciliation before installing it; existing Airlock and
+private-worker users must retain gateway reachability. No live app was changed.
+PR #4's official JS realtime SDK opens a direct pinned WebSocket and strips
+custom proxy agents. Live realtime behind this PR's DNS-disabled CONNECT-only
+seal is **not supported/proven by this rebase**; Miguel/Oscar must supply a
+verified SDK proxy route (without weakening its pin) or separate that capability
+before deploying the combined app. Do not widen the egress allowlist or silently
+restore direct internet to make that test pass.
