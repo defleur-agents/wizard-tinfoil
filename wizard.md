@@ -29,7 +29,12 @@ view:
     path: web
     build: python3 app/build_view.py
     dist: web
-provides: [ai-connection, tinfoil-api-key]
+provides: [ai-connection, tinfoil-api-key, private-inference]
+private_inference:
+  kind: attested-relay
+  client: tinfoil
+  relay_port: 8090
+  egress: [inference.tinfoil.sh, atc.tinfoil.sh]
 system: true
 uses: [hermes-agent]
 needs: []

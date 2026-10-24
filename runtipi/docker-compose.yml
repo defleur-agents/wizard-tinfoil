@@ -4,6 +4,8 @@ services:
   wizard-tinfoil:
     image: ghcr.io/humanitylabs-org/wizard-tinfoil:0.3.1@sha256:ecd491d39a585aa37e47681a309f16e9492728ab331131bdca7186af19f7ad95
     user: "1000:1000"
+    # Runtime attaches the internal 10.252.x.0/24 relay network; never publish to host.
+    expose: ["8090"]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
